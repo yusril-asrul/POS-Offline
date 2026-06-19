@@ -1,98 +1,140 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
-
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useSQLiteContext } from 'expo-sqlite';
+import { useCallback, useState } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
+import * as ScreenOrientation from 'expo-screen-orientation';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { useLockOrientation } from '@/hooks/use-orientation';
+import { Colors, Shadows } from '@/constants/theme';
 
-export default function HomeScreen() {
+export default function DashboardScreen() {
+  const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const db = useSQLiteContext();
+
+  useLockOrientation(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+
+  const [summary, setSummary] = useState({
+    today: 0,
+    todayCount: 0,
+    week: 0,
+    month: 0,
+    productCount: 0,
+  });
+  const [loading, setLoading] = useState(true);
+
+  const loadSummary = useCallback(async () => {
+    setLoading(true);
+    const today = await db.getFirstAsync<{ total: number; count: number }>(
+      `SELECT COALESCE(SUM(total),0) as total, COUNT(*) as count FROM transactions WHERE date(created_at) = date('now','localtime')`
+    );
+    const week = await db.getFirstAsync<{ total: number }>(
+      `SELECT COALESCE(SUM(total),0) as total FROM transactions WHERE created_at >= datetime('now','localtime','-7 days')`
+    );
+    const month = await db.getFirstAsync<{ total: number }>(
+      `SELECT COALESCE(SUM(total),0) as total FROM transactions WHERE strftime('%Y-%m', created_at) = strftime('%Y-%m', 'now','localtime')`
+    );
+    const productCount = await db.getFirstAsync<{ count: number }>(
+      'SELECT COUNT(*) as count FROM products'
+    );
+    setSummary({
+      today: today?.total ?? 0,
+      todayCount: today?.count ?? 0,
+      week: week?.total ?? 0,
+      month: month?.total ?? 0,
+      productCount: productCount?.count ?? 0,
+    });
+    setLoading(false);
+  }, [db]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadSummary();
+    }, [loadSummary])
+  );
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+    <ThemedView style={[styles.container, { paddingLeft: insets.left + 16, paddingRight: insets.right + 16 }]}>
+      <View style={styles.brand}>
+        <ThemedText style={styles.brandIcon}>{'\u{1F4B0}'}</ThemedText>
+        <View>
+          <ThemedText type="title" style={{ fontSize: 26 }}>POS Offline</ThemedText>
+          <ThemedText style={styles.brandSub}>Rumah Makan</ThemedText>
+        </View>
+      </View>
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+      {loading ? (
+        <ActivityIndicator size="large" color={Colors.tint} style={{ marginTop: 60 }} />
+      ) : (
+        <>
+          <View style={styles.cardsRow}>
+            <Card style={styles.statCard}>
+              <ThemedText style={styles.statIcon}>{'\u{1F4E6}'}</ThemedText>
+              <ThemedText style={styles.statNumber}>{summary.productCount}</ThemedText>
+              <ThemedText style={styles.statLabel}>Produk</ThemedText>
+            </Card>
+            <Card style={styles.statCard}>
+              <ThemedText style={styles.statIcon}>{'\u{1F4B5}'}</ThemedText>
+              <ThemedText style={styles.statNumber}>{summary.todayCount}</ThemedText>
+              <ThemedText style={styles.statLabel}>Transaksi Hari Ini</ThemedText>
+            </Card>
+          </View>
+
+          <Card style={{ marginBottom: 24 }}>
+            <ThemedText style={styles.rekapTitle}>Rekap Penjualan</ThemedText>
+            <View style={styles.rekapRow}>
+              <ThemedText style={styles.rekapLabel}>Hari Ini</ThemedText>
+              <ThemedText style={styles.rekapValue}>
+                Rp {summary.today.toLocaleString()}
+              </ThemedText>
+            </View>
+            <View style={styles.rekapRow}>
+              <ThemedText style={styles.rekapLabel}>7 Hari</ThemedText>
+              <ThemedText style={styles.rekapValue}>
+                Rp {summary.week.toLocaleString()}
+              </ThemedText>
+            </View>
+            <View style={styles.rekapRow}>
+              <ThemedText style={styles.rekapLabel}>Bulan Ini</ThemedText>
+              <ThemedText style={[styles.rekapValue, { fontSize: 16 }]}>
+                Rp {summary.month.toLocaleString()}
+              </ThemedText>
+            </View>
+          </Card>
+        </>
+      )}
+
+      <Button
+        title="Mulai Menjual"
+        size="lg"
+        onPress={() => router.push('/transaksi')}
+      />
+    </ThemedView>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
+  container: { flex: 1, paddingTop: 32, gap: 20 },
+  brand: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 4 },
+  brandIcon: { fontSize: 40, lineHeight: 44 },
+  brandSub: { fontSize: 13, color: Colors.placeholder },
+  cardsRow: { flexDirection: 'row', gap: 12 },
+  statCard: { flex: 1, alignItems: 'center', gap: 4 },
+  statIcon: { fontSize: 28, lineHeight: 34 },
+  statNumber: { fontSize: 22, fontWeight: 'bold' },
+  statLabel: { fontSize: 11, color: Colors.placeholder, textAlign: 'center' },
+  rekapTitle: { fontSize: 14, fontWeight: '600', marginBottom: 12 },
+  rekapRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.borderLight,
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
-  },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
-  },
+  rekapLabel: { fontSize: 13, color: Colors.placeholder },
+  rekapValue: { fontSize: 14, fontWeight: '600' },
 });
