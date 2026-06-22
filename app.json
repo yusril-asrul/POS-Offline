@@ -13,6 +13,8 @@
     },
     "android": {
       "package": "com.rumahmakan.posoffline",
+      "enableProguardInReleaseBuilds": true,
+      "enableShrinkResourcesInReleaseBuilds": true,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -20,7 +22,13 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "splits": {
+        "abi": {
+          "enable": true,
+          "universalApk": false
+        }
+      }
     },
     "web": {
       "output": "static",
