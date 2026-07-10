@@ -1,4 +1,13 @@
+import { ThemedText } from '@/components/themed-text';
+import { ThemedView } from '@/components/themed-view';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Colors, Shadows } from '@/constants/theme';
+import { useLockOrientation } from '@/hooks/use-orientation';
+import { useProductStore, type Product } from '@/stores/productStore';
+import { useTransactionStore, type CartItem } from '@/stores/transactionStore';
 import { useRouter } from 'expo-router';
+import * as ScreenOrientation from 'expo-screen-orientation';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useEffect, useState } from 'react';
 import {
@@ -9,16 +18,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import * as ScreenOrientation from 'expo-screen-orientation';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Card } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { useLockOrientation } from '@/hooks/use-orientation';
-import { useProductStore, type Product } from '@/stores/productStore';
-import { useTransactionStore, type CartItem } from '@/stores/transactionStore';
-import { Colors, Shadows } from '@/constants/theme';
 
 export default function TransactionScreen() {
   const router = useRouter();
