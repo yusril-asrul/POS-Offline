@@ -8,7 +8,7 @@ import { useProductStore, type Product } from '@/stores/productStore';
 import { useTransactionStore, type CartItem } from '@/stores/transactionStore';
 import { usePrinterStore } from '@/stores/printerStore';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { buildReceiptText, printReceipt } from '@/services/print';
+import { printReceipt } from '@/services/print';
 import { useRouter } from 'expo-router';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { useSQLiteContext } from 'expo-sqlite';
@@ -491,7 +491,7 @@ function SuccessView({
     if (!lastTransaction) return;
 
     try {
-      const receipt = buildReceiptText({
+      await printReceipt({
         transactionId,
         createdAt: new Date().toISOString(),
         items: lastTransaction.items,
@@ -502,7 +502,6 @@ function SuccessView({
         storeName,
         storeAddress: businessType,
       });
-      await printReceipt(receipt);
       Alert.alert('Sukses', 'Struk berhasil dicetak');
     } catch {
       Alert.alert('Gagal', 'Cetak struk gagal. Periksa koneksi printer.');
