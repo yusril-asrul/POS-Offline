@@ -3,11 +3,20 @@ import * as SQLite from 'expo-sqlite';
 export type SQLiteDatabase = SQLite.SQLiteDatabase;
 
 export async function migrateDbIfNeeded(db: SQLiteDatabase) {
-  const DATABASE_VERSION = 2;
+  const DATABASE_VERSION = 3;
   const versionRow = await db.getFirstAsync<{ user_version: number }>(
     'PRAGMA user_version'
   );
   let currentDbVersion = versionRow?.user_version ?? 0;
+
+  await db.execAsync(`
+    CREATE TABLE IF NOT EXISTS settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
+    INSERT OR IGNORE INTO settings (key, value) VALUES ('store_name', 'POS Offline');
+    INSERT OR IGNORE INTO settings (key, value) VALUES ('business_type', 'Toko');
+  `);
 
   if (currentDbVersion >= DATABASE_VERSION) return;
 
@@ -61,6 +70,10 @@ export async function migrateDbIfNeeded(db: SQLiteDatabase) {
       );
     `);
     currentDbVersion = 2;
+  }
+
+  if (currentDbVersion === 2) {
+    currentDbVersion = 3;
   }
 
   await db.execAsync(`PRAGMA user_version = ${DATABASE_VERSION}`);

@@ -36,7 +36,7 @@ interface TransactionState {
   updateQuantity: (productId: number, quantity: number) => void;
   removeFromCart: (productId: number) => void;
   clearCart: () => void;
-  checkout: (db: SQLiteDatabase, paymentMethod: string, paymentAmount: number) => Promise<void>;
+  checkout: (db: SQLiteDatabase, paymentMethod: string, paymentAmount: number) => Promise<number>;
   loadTransactions: (db: SQLiteDatabase) => Promise<void>;
 }
 
@@ -99,11 +99,12 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
 
   checkout: async (db, paymentMethod, paymentAmount) => {
     const { cart } = get();
-    if (cart.length === 0) return;
+    if (cart.length === 0) return 0;
 
     const total = cart.reduce((sum, item) => sum + item.subtotal, 0);
     const change = paymentAmount - total;
 
+    let transactionId = 0;
     await db.withExclusiveTransactionAsync(async (txn) => {
       const result = await txn.runAsync(
         'INSERT INTO transactions (total, payment_method, payment_amount, change) VALUES (?, ?, ?, ?)',
@@ -112,7 +113,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
         paymentAmount,
         change >= 0 ? change : 0
       );
-      const transactionId = result.lastInsertRowId;
+      transactionId = result.lastInsertRowId as number;
 
       for (const item of cart) {
         await txn.runAsync(
@@ -129,6 +130,11 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
 
     set({ cart: [] });
     await get().loadTransactions(db);
+
+    const countResult = await db.getFirstAsync<{ count: number }>(
+      "SELECT COUNT(*) as count FROM transactions WHERE date(created_at) = date('now','localtime')"
+    );
+    return countResult?.count ?? 0;
   },
 
   loadTransactions: async (db) => {

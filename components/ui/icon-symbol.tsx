@@ -23,6 +23,8 @@ const MAPPING = {
   'clock.fill': 'history',
   'chart.bar.fill': 'bar-chart',
   'square.grid.2x2.fill': 'grid-view',
+  'printer.fill': 'print',
+  'gearshape.fill': 'settings',
 } as IconMapping;
 
 /**

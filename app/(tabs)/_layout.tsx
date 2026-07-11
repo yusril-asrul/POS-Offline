@@ -42,14 +42,17 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="reports"
+        name="settings"
         options={{
-          title: 'Laporan',
+          title: 'Pengaturan',
           tabBarIcon: ({ color }) => (
-            <IconSymbol size={28} name="chart.bar.fill" color={color} />
+            <IconSymbol size={28} name="gearshape.fill" color={color} />
           ),
         }}
       />
+      <Tabs.Screen name="reports" options={{ href: null }} />
+      <Tabs.Screen name="printer" options={{ href: null }} />
+      <Tabs.Screen name="store-settings" options={{ href: null }} />
     </Tabs>
   );
 }

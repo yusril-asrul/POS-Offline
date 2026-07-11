@@ -9,6 +9,7 @@ import { ThemedView } from '@/components/themed-view';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { useLockOrientation } from '@/hooks/use-orientation';
+import { useSettingsStore } from '@/stores/settingsStore';
 import { Colors, Shadows } from '@/constants/theme';
 
 export default function DashboardScreen() {
@@ -18,6 +19,7 @@ export default function DashboardScreen() {
 
   useLockOrientation(ScreenOrientation.OrientationLock.PORTRAIT_UP);
 
+  const { storeName, businessType, loadSettings } = useSettingsStore();
   const [summary, setSummary] = useState({
     today: 0,
     todayCount: 0,
@@ -29,6 +31,7 @@ export default function DashboardScreen() {
 
   const loadSummary = useCallback(async () => {
     setLoading(true);
+    await loadSettings(db);
     const today = await db.getFirstAsync<{ total: number; count: number }>(
       `SELECT COALESCE(SUM(total),0) as total, COUNT(*) as count FROM transactions WHERE date(created_at) = date('now','localtime')`
     );
@@ -49,7 +52,7 @@ export default function DashboardScreen() {
       productCount: productCount?.count ?? 0,
     });
     setLoading(false);
-  }, [db]);
+  }, [db, loadSettings]);
 
   useFocusEffect(
     useCallback(() => {
@@ -62,8 +65,8 @@ export default function DashboardScreen() {
       <View style={styles.brand}>
         <ThemedText style={styles.brandIcon}>{'\u{1F4B0}'}</ThemedText>
         <View>
-          <ThemedText type="title" style={{ fontSize: 26 }}>POS Offline</ThemedText>
-          <ThemedText style={styles.brandSub}>Rumah Makan</ThemedText>
+          <ThemedText type="title" style={{ fontSize: 26 }}>{storeName}</ThemedText>
+          <ThemedText style={styles.brandSub}>{businessType}</ThemedText>
         </View>
       </View>
 

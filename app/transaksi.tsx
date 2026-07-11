@@ -6,11 +6,15 @@ import { Colors, Shadows } from '@/constants/theme';
 import { useLockOrientation } from '@/hooks/use-orientation';
 import { useProductStore, type Product } from '@/stores/productStore';
 import { useTransactionStore, type CartItem } from '@/stores/transactionStore';
+import { usePrinterStore } from '@/stores/printerStore';
+import { useSettingsStore } from '@/stores/settingsStore';
+import { buildReceiptText, printReceipt } from '@/services/print';
 import { useRouter } from 'expo-router';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useEffect, useState } from 'react';
 import {
+  Alert,
   FlatList,
   Image,
   Pressable,
@@ -29,6 +33,7 @@ export default function TransactionScreen() {
   const { products, loadProducts } = useProductStore();
   const { cart, addToCart, updateQuantity, removeFromCart, checkout } =
     useTransactionStore();
+  const { storeName: settingsStoreName, businessType, loadSettings } = useSettingsStore();
 
   const [step, setStep] = useState<1 | 2>(1);
   const [search, setSearch] = useState('');
@@ -36,10 +41,18 @@ export default function TransactionScreen() {
   const [paymentAmount, setPaymentAmount] = useState('');
   const [showSuccess, setShowSuccess] = useState(false);
   const [successTotal, setSuccessTotal] = useState(0);
+  const [successDailySeq, setSuccessDailySeq] = useState(0);
+  const [lastTransaction, setLastTransaction] = useState<{
+    items: CartItem[];
+    paymentMethod: 'tunai' | 'qris';
+    paymentAmount: number;
+    change: number;
+  } | null>(null);
 
   useEffect(() => {
     loadProducts(db);
-  }, [db, loadProducts]);
+    loadSettings(db);
+  }, [db, loadProducts, loadSettings]);
 
   const filteredProducts = products.filter((p) =>
     p.name.toLowerCase().includes(search.toLowerCase())
@@ -63,7 +76,14 @@ export default function TransactionScreen() {
     if (cart.length === 0) return;
     if (paymentMethod === 'tunai' && parsedAmount < total) return;
     setSuccessTotal(total);
-    await checkout(db, paymentMethod, parsedAmount || total);
+    setLastTransaction({
+      items: [...cart],
+      paymentMethod,
+      paymentAmount: parsedAmount || total,
+      change,
+    });
+    const dailySeq = await checkout(db, paymentMethod, parsedAmount || total);
+    setSuccessDailySeq(dailySeq);
     setPaymentAmount('');
     setShowSuccess(true);
   };
@@ -76,6 +96,7 @@ export default function TransactionScreen() {
     setStep(1);
     setShowSuccess(false);
     setPaymentAmount('');
+    setLastTransaction(null);
   };
 
   return (
@@ -94,7 +115,12 @@ export default function TransactionScreen() {
           onDone={handleSelesaiMenjual}
         />
       ) : showSuccess ? (
-        <SuccessView total={successTotal} onDone={handleDone} />
+        <SuccessView
+          total={successTotal}
+          transactionId={successDailySeq}
+          lastTransaction={lastTransaction}
+          onDone={handleDone}
+        />
       ) : (
         <Step2View
           cart={cart}
@@ -433,7 +459,56 @@ function NumericKeypad({ onPress }: { onPress: (v: string) => void }) {
   );
 }
 
-function SuccessView({ total, onDone }: { total: number; onDone: () => void }) {
+function SuccessView({
+  total,
+  transactionId,
+  lastTransaction,
+  onDone,
+}: {
+  total: number;
+  transactionId: number;
+  lastTransaction: {
+    items: CartItem[];
+    paymentMethod: 'tunai' | 'qris';
+    paymentAmount: number;
+    change: number;
+  } | null;
+  onDone: () => void;
+}) {
+  const { storeName, businessType } = useSettingsStore();
+  const { printerTarget, printerName } = usePrinterStore();
+  const router = useRouter();
+
+  const handlePrint = async () => {
+    if (!printerTarget) {
+      Alert.alert('Printer belum terhubung', 'Hubungkan printer di tab Printer terlebih dahulu.', [
+        { text: 'Batal', style: 'cancel' },
+        { text: 'Buka Printer', onPress: () => router.push('/(tabs)/printer') },
+      ]);
+      return;
+    }
+
+    if (!lastTransaction) return;
+
+    try {
+      const receipt = buildReceiptText({
+        transactionId,
+        createdAt: new Date().toISOString(),
+        items: lastTransaction.items,
+        total,
+        paymentMethod: lastTransaction.paymentMethod,
+        paymentAmount: lastTransaction.paymentAmount,
+        change: lastTransaction.change,
+        storeName,
+        storeAddress: businessType,
+      });
+      await printReceipt(receipt);
+      Alert.alert('Sukses', 'Struk berhasil dicetak');
+    } catch {
+      Alert.alert('Gagal', 'Cetak struk gagal. Periksa koneksi printer.');
+    }
+  };
+
   return (
     <View style={styles.successContainer}>
       <Card padding={32} style={{ alignItems: 'center', gap: 8 }}>
@@ -442,7 +517,15 @@ function SuccessView({ total, onDone }: { total: number; onDone: () => void }) {
         <ThemedText style={{ fontSize: 28, lineHeight: 34, fontWeight: 'bold', color: Colors.success }}>
           Rp {total.toLocaleString()}
         </ThemedText>
-        <Button title="Selesai" onPress={onDone} style={{ marginTop: 16 }} />
+        <View style={{ flexDirection: 'row', gap: 12, marginTop: 16 }}>
+          <Button title="Cetak Struk" variant="outline" onPress={handlePrint} />
+          <Button title="Selesai" onPress={onDone} />
+        </View>
+        {!printerName && (
+          <ThemedText style={{ fontSize: 11, color: Colors.placeholder }}>
+            Belum ada printer. Cetak struk tidak tersedia.
+          </ThemedText>
+        )}
       </Card>
     </View>
   );
