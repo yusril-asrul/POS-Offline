@@ -1,28 +1,32 @@
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { useSQLiteContext } from 'expo-sqlite';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { useLockOrientation } from '@/hooks/use-orientation';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/ui/empty-state';
-import { useLockOrientation } from '@/hooks/use-orientation';
-import { useTransactionStore, type Transaction } from '@/stores/transactionStore';
-import { Colors, Shadows } from '@/constants/theme';
+import { IconSymbol } from '@/components/ui/icon-symbol';
+import { useTransactionStore, type PeriodFilter, type Transaction } from '@/stores/transactionStore';
+import { Colors } from '@/constants/theme';
 
 export default function HistoryScreen() {
   useLockOrientation(ScreenOrientation.OrientationLock.PORTRAIT_UP);
   const insets = useSafeAreaInsets();
   const db = useSQLiteContext();
-  const { transactions, loadTransactions } = useTransactionStore();
+  const { transactions, loading, hasMore, loadTransactions } = useTransactionStore();
   const [selected, setSelected] = useState<Transaction | null>(null);
   const [items, setItems] = useState<any[]>([]);
+  const [period, setPeriod] = useState<PeriodFilter>('all');
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
-    loadTransactions(db);
-  }, [db, loadTransactions]);
+    setPage(1);
+    loadTransactions(db, period, 1);
+  }, [db, period, loadTransactions]);
 
   const selectTransaction = async (t: Transaction) => {
     setSelected(t);
@@ -31,6 +35,14 @@ export default function HistoryScreen() {
       t.id
     );
     setItems(rows);
+  };
+
+  const handleLoadMore = () => {
+    if (!loading && hasMore) {
+      const nextPage = page + 1;
+      setPage(nextPage);
+      loadTransactions(db, period, nextPage);
+    }
   };
 
   const formatDate = (date: string) => {
@@ -44,13 +56,21 @@ export default function HistoryScreen() {
     });
   };
 
+  const periods: { key: PeriodFilter; label: string }[] = [
+    { key: 'today', label: 'Hari Ini' },
+    { key: 'week', label: '7 Hari' },
+    { key: 'month', label: '30 Hari' },
+    { key: 'all', label: 'Semua' },
+  ];
+
   if (selected) {
     return (
       <ThemedView style={[styles.container, { paddingLeft: insets.left + 16, paddingRight: insets.right + 16 }]}>
         <Pressable onPress={() => setSelected(null)} style={styles.backRow}>
-          <ThemedText style={{ color: Colors.tint, fontWeight: '600', fontSize: 14 }}>
-            &larr; Kembali
-          </ThemedText>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <IconSymbol name="chevron.left" size={18} color={Colors.tint} />
+            <ThemedText style={{ color: Colors.tint, fontWeight: '600', fontSize: 14 }}>Kembali</ThemedText>
+          </View>
         </Pressable>
 
         <Card style={{ marginBottom: 16 }}>
@@ -108,11 +128,28 @@ export default function HistoryScreen() {
 
   return (
     <ThemedView style={[styles.container, { paddingLeft: insets.left + 16, paddingRight: insets.right + 16 }]}>
-      <ThemedText type="title" style={{ marginBottom: 16 }}>Riwayat Transaksi</ThemedText>
+      <ThemedText type="title" style={{ marginBottom: 12 }}>Riwayat Transaksi</ThemedText>
+
+      <View style={styles.filterRow}>
+        {periods.map((p) => (
+          <Pressable
+            key={p.key}
+            style={[styles.filterBtn, period === p.key && styles.filterBtnActive]}
+            onPress={() => setPeriod(p.key)}
+          >
+            <ThemedText
+              style={[styles.filterBtnText, period === p.key && styles.filterBtnTextActive]}
+            >
+              {p.label}
+            </ThemedText>
+          </Pressable>
+        ))}
+      </View>
+
       <FlatList
         data={transactions}
         keyExtractor={(item) => item.id.toString()}
-        contentContainerStyle={{ gap: 8 }}
+        contentContainerStyle={{ gap: 8, paddingTop: 8 }}
         renderItem={({ item }) => (
           <Pressable onPress={() => selectTransaction(item)}>
             <Card style={styles.transactionCard}>
@@ -131,16 +168,29 @@ export default function HistoryScreen() {
                   Rp {item.total.toLocaleString()}
                 </ThemedText>
               </View>
-              <ThemedText style={{ color: Colors.muted }}>{'\u203A'}</ThemedText>
+              <IconSymbol name="chevron.right" size={20} color={Colors.muted} />
             </Card>
           </Pressable>
         )}
+        onEndReached={handleLoadMore}
+        onEndReachedThreshold={0.3}
+        ListFooterComponent={
+          loading ? (
+            <ActivityIndicator size="small" color={Colors.tint} style={{ paddingVertical: 16 }} />
+          ) : !hasMore && transactions.length > 0 ? (
+            <ThemedText style={{ textAlign: 'center', color: Colors.muted, paddingVertical: 12, fontSize: 12 }}>
+              Semua transaksi telah dimuat
+            </ThemedText>
+          ) : null
+        }
         ListEmptyComponent={
-          <EmptyState
-            icon={'\u{1F4CB}'}
-            title="Belum ada transaksi"
-            subtitle="Transaksi akan muncul di sini"
-          />
+          !loading ? (
+            <EmptyState
+              icon={'\u{1F4CB}'}
+              title="Belum ada transaksi"
+              subtitle="Transaksi akan muncul di sini"
+            />
+          ) : null
         }
       />
     </ThemedView>
@@ -150,6 +200,31 @@ export default function HistoryScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 16 },
   backRow: { marginBottom: 16 },
+  filterRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginBottom: 4,
+  },
+  filterBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.card,
+  },
+  filterBtnActive: {
+    backgroundColor: Colors.tint,
+    borderColor: Colors.tint,
+  },
+  filterBtnText: {
+    fontSize: 12,
+    color: Colors.text,
+    fontWeight: '500',
+  },
+  filterBtnTextActive: {
+    color: '#fff',
+  },
   transactionCard: {
     flexDirection: 'row',
     alignItems: 'center',

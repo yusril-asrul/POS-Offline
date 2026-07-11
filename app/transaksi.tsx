@@ -2,6 +2,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors, Shadows } from '@/constants/theme';
 import { useLockOrientation } from '@/hooks/use-orientation';
 import { useProductStore, type Product } from '@/stores/productStore';
@@ -298,9 +299,10 @@ function Step2View({
     <>
       <View style={styles.colSummary}>
         <Pressable onPress={onBack} style={styles.backRow}>
-          <ThemedText style={{ color: Colors.tint, fontWeight: '600' }}>
-            {'\u2190'} Kembali
-          </ThemedText>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <IconSymbol name="chevron.left" size={18} color={Colors.tint} />
+            <ThemedText style={{ color: Colors.tint, fontWeight: '600' }}>Kembali</ThemedText>
+          </View>
         </Pressable>
 
         <ThemedText type="subtitle" style={{ marginBottom: 12 }}>Ringkasan Pesanan</ThemedText>

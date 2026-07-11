@@ -28,22 +28,26 @@ export interface TransactionItem {
   subtotal: number;
 }
 
+export type PeriodFilter = 'today' | 'week' | 'month' | 'all';
+
 interface TransactionState {
   cart: CartItem[];
   transactions: Transaction[];
   loading: boolean;
+  hasMore: boolean;
   addToCart: (product: { id: number; name: string; price: number }) => void;
   updateQuantity: (productId: number, quantity: number) => void;
   removeFromCart: (productId: number) => void;
   clearCart: () => void;
   checkout: (db: SQLiteDatabase, paymentMethod: string, paymentAmount: number) => Promise<number>;
-  loadTransactions: (db: SQLiteDatabase) => Promise<void>;
+  loadTransactions: (db: SQLiteDatabase, period?: PeriodFilter, page?: number, pageSize?: number) => Promise<void>;
 }
 
 export const useTransactionStore = create<TransactionState>((set, get) => ({
   cart: [],
   transactions: [],
   loading: false,
+  hasMore: true,
 
   addToCart: (product) => {
     const { cart } = get();
@@ -137,11 +141,39 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     return countResult?.count ?? 0;
   },
 
-  loadTransactions: async (db) => {
+  loadTransactions: async (db, period = 'all', page = 1, pageSize = 50) => {
     set({ loading: true });
+
+    let whereClause = '';
+    switch (period) {
+      case 'today':
+        whereClause = "WHERE date(created_at) = date('now','localtime')";
+        break;
+      case 'week':
+        whereClause = "WHERE created_at >= datetime('now','localtime','-7 days')";
+        break;
+      case 'month':
+        whereClause = "WHERE strftime('%Y-%m', created_at) = strftime('%Y-%m', 'now','localtime')";
+        break;
+    }
+
+    const offset = (page - 1) * pageSize;
     const transactions = await db.getAllAsync<Transaction>(
-      'SELECT * FROM transactions ORDER BY created_at DESC'
+      `SELECT * FROM transactions ${whereClause} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+      pageSize,
+      offset
     );
-    set({ transactions, loading: false });
+
+    const countResult = await db.getFirstAsync<{ count: number }>(
+      `SELECT COUNT(*) as count FROM transactions ${whereClause}`
+    );
+    const totalCount = countResult?.count ?? 0;
+    const hasMore = offset + pageSize < totalCount;
+
+    set((state) => ({
+      transactions: page === 1 ? transactions : [...state.transactions, ...transactions],
+      loading: false,
+      hasMore,
+    }));
   },
 }));
